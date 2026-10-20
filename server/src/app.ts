@@ -11,7 +11,11 @@ export const createApp = (): Application => {
   const app = express();
 
   // Security Headers
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: { mediaSrc: ["'self'", 'blob:'] },
+    },
+  }));
 
   // CORS Configuration
   app.use(
@@ -25,7 +29,9 @@ export const createApp = (): Application => {
 
   // Request Logging
   if (env.NODE_ENV !== 'test') {
-    app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+    app.use(    morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+      skip: (req) => req.path.startsWith('/api/client-portal/'),
+    }));
   }
 
   // Body Parsing

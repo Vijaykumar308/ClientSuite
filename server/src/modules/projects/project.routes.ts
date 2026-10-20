@@ -1,4 +1,5 @@
 import { Prisma, ProjectStatus } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { AppError } from '../../middlewares/errorHandler';
@@ -58,6 +59,7 @@ const projectSelection = {
   price: true,
   currency: true,
   dueDate: true,
+  portalEnabled: true,
   createdAt: true,
   updatedAt: true,
   client: { select: { id: true, name: true, email: true } },
@@ -175,10 +177,57 @@ projectRouter.get('/:projectId', async (req: Request, res: Response, next: NextF
     const projectId = z.string().uuid().parse(req.params.projectId);
     const project = await prisma.project.findFirst({
       where: { id: projectId, tenantId },
-      select: projectSelection,
+      select: { ...projectSelection, portalToken: true },
     });
     if (!project) throw new AppError('Project not found in this workspace.', 404);
     res.json({ success: true, data: project });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      next(new AppError(error.issues[0]?.message ?? 'Invalid project identifier.', 400));
+      return;
+    }
+    next(error);
+  }
+});
+
+projectRouter.post('/:projectId/share-link', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(res);
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    const token = randomUUID();
+    const project = await prisma.project.updateMany({
+      where: { id: projectId, tenantId },
+      data: {
+        portalToken: token,
+        portalTokenExpiresAt: null,
+        portalEnabled: true,
+      },
+    });
+    if (project.count === 0) throw new AppError('Project not found in this workspace.', 404);
+    res.json({ success: true, data: { token } });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      next(new AppError(error.issues[0]?.message ?? 'Invalid project identifier.', 400));
+      return;
+    }
+    next(error);
+  }
+});
+
+projectRouter.delete('/:projectId/share-link', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const tenantId = getTenantId(res);
+    const projectId = z.string().uuid().parse(req.params.projectId);
+    const project = await prisma.project.updateMany({
+      where: { id: projectId, tenantId },
+      data: {
+        portalToken: randomUUID(),
+        portalTokenExpiresAt: null,
+        portalEnabled: false,
+      },
+    });
+    if (project.count === 0) throw new AppError('Project not found in this workspace.', 404);
+    res.json({ success: true, data: { revoked: true } });
   } catch (error) {
     if (error instanceof z.ZodError) {
       next(new AppError(error.issues[0]?.message ?? 'Invalid project identifier.', 400));

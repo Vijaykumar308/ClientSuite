@@ -25,5 +25,5 @@ export const env = {
   MAX_FILE_SIZE_MB: process.env.MAX_FILE_SIZE_MB ? parseInt(process.env.MAX_FILE_SIZE_MB, 10) : 200,
   DEFAULT_PREVIEW_DURATION_SECONDS: process.env.DEFAULT_PREVIEW_DURATION_SECONDS
     ? parseInt(process.env.DEFAULT_PREVIEW_DURATION_SECONDS, 10)
-    : 15,
+    : 20,
 };

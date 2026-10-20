@@ -58,7 +58,7 @@ model Tenant {
   plan                TenantPlan     @default(FREE_TRIAL)
   storageQuotaBytes   BigInt         @default(10737418240) // 10 GB default
   storageUsedBytes    BigInt         @default(0)
-  maxPreviewSeconds   Int            @default(15)
+  maxPreviewSeconds   Int            @default(20)
   trialEndsAt         DateTime?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
@@ -69,6 +69,7 @@ model Tenant {
   paymentGateway      TenantPaymentGateway?
   clients             Client[]
   projects            Project[]
+  audioTracks         ProjectAudioTrack[]
   assets              ProjectAsset[]
   feedbacks           ProjectFeedback[]
   approvals           ProjectApproval[]
@@ -238,7 +239,8 @@ model Project {
   dueDate               DateTime?
   portalToken           String              @unique @default(uuid())
   portalTokenExpiresAt  DateTime?
-  requirePaymentForDownload Boolean         @default(true)
+  portalEnabled         Boolean             @default(false)
+  requirePaymentForDownload Boolean          @default(true)
   internalNotes         String?             @db.Text
   clientNotes           String?             @db.Text
   createdAt             DateTime            @default(now())
@@ -246,6 +248,7 @@ model Project {
 
   tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client                Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  audioTracks           ProjectAudioTrack[]
   assets                ProjectAsset[]
   feedbacks             ProjectFeedback[]
   approval              ProjectApproval?
@@ -267,15 +270,33 @@ enum AssetStatus {
   FAILED
 }
 
+model ProjectAudioTrack {
+  id        String         @id @default(uuid())
+  tenantId  String
+  projectId String
+  title     String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions ProjectAsset[]
+
+  @@index([tenantId, projectId])
+  @@map("project_audio_tracks")
+}
+
 model ProjectAsset {
   id                     String            @id @default(uuid())
   tenantId               String
   projectId              String
+  audioTrackId           String
   versionNumber          Int               @default(1)
   title                  String
+  fileName               String
   originalStoragePath    String            // Secure private server storage path
   previewStoragePath     String?           // Server-trimmed 10-15s preview file path
-  previewDurationSeconds Int               @default(15)
+  previewDurationSeconds Int               @default(20)
   durationSeconds        Float?
   fileSizeBytes          BigInt?
   mimeType               String?
@@ -287,9 +308,11 @@ model ProjectAsset {
 
   tenant                 Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   project                Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  audioTrack             ProjectAudioTrack @relation(fields: [audioTrackId], references: [id], onDelete: Cascade)
   feedbacks              ProjectFeedback[]
 
   @@index([tenantId, projectId])
+  @@unique([audioTrackId, versionNumber])
   @@map("project_assets")
 }
 
