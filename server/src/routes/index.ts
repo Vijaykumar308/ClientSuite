@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import healthRoutes from './health.routes';
-import { authRouter } from '../modules/auth/auth.routes';
+import { authRouter, requireTenantSession } from '../modules/auth/auth.routes';
 import { clientRouter } from '../modules/clients/client.routes';
 import { projectRouter } from '../modules/projects/project.routes';
 import { audioRouter } from '../modules/audio/audio.routes';
@@ -11,6 +11,7 @@ export const apiRouter = Router();
 
 apiRouter.use(healthRoutes);
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/tenant', requireTenantSession);
 apiRouter.use('/tenant/clients', clientRouter);
 apiRouter.use('/tenant/projects', projectRouter);
 apiRouter.use('/audio', audioRouter);

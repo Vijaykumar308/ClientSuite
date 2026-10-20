@@ -62,24 +62,24 @@ Phase 10: Production Readiness, Security Hardening & EC2 Deployment
 
 ## 🗄️ Phase 1: Database Schema & Multi-Tenant Data Layer (PostgreSQL + Prisma)
 
-- [ ] **TASK-1.1: Prisma Initialization & Connection**
+- [x] **TASK-1.1: Prisma Initialization & Connection**
   - Initialize Prisma in `server/prisma/schema.prisma`.
   - Connect to local PostgreSQL database and test connection.
 
-- [ ] **TASK-1.2: Core Multi-Tenant Models Definition**
+- [x] **TASK-1.2: Core Multi-Tenant Models Definition**
   - Define `PlatformAdmin` (email, password_hash, role, audit logs).
   - Define `Tenant` (id, name, slug, status: `ACTIVE`, `TRIAL`, `SUSPENDED`, `CANCELLED`, plan, createdAt).
   - Define `User` / `TenantMembership` (id, tenantId, email, passwordHash, role: `TENANT_ADMIN`, `TEAM_MEMBER`).
   - Define `TenantBranding` (tenantId, businessName, logoUrl, brandColor, themeMode, customDomain).
 
-- [ ] **TASK-1.3: CRM & Project Models Definition**
+- [x] **TASK-1.3: CRM & Project Models Definition**
   - Define `Client` (id, tenantId, name, email, phone, company, status, notes).
   - Define `Project` (id, tenantId, clientId, name, description, status, price, currency, paymentStatus, deliveryStatus, dueDate).
   - Define `ProjectAsset` (id, tenantId, projectId, versionNumber, originalPath, previewPath, durationSeconds, fileSize, mimeType, status).
   - Define `ProjectFeedback` (id, tenantId, projectId, assetId, authorRole, authorName, comment, timestamp).
   - Define `ProjectApproval` (id, tenantId, projectId, approvedBy, approvedAt, clientIp).
 
-- [ ] **TASK-1.4: Payment, Audit & Notification Models**
+- [x] **TASK-1.4: Payment, Audit & Notification Models**
   - Define `TenantPaymentGateway` (tenantId, provider, publicKey, encryptedSecretRef, isLive, currency).
   - Define `PaymentTransaction` (id, tenantId, projectId, amount, currency, status, gatewayTxId, rawWebhookData, paidAt).
   - Define `AuditLog` (id, tenantId, actorId, actorType, action, metadata, ipAddress, createdAt).
