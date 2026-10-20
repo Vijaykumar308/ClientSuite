@@ -1,0 +1,60 @@
+# Proprietary & Internal Documents (DO NOT COMMIT TO GITHUB)
+ClientSuite_Music_PRD.md
+*PRD*.md
+*prd*.md
+internal-docs/
+docs/internal/
+*.m4a
+*.mp3
+*.wav
+*.flac
+*.aac
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+!*.env.example
+
+# Production & Build outputs
+dist/
+build/
+out/
+.next/
+
+# Logs & Runtime
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# Uploads & Media Storage
+uploads/
+storage/
+temp/
+tmp/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Prisma Generated Clients (if generated locally)
+# prisma/client/
