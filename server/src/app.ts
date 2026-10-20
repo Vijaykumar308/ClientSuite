@@ -11,7 +11,11 @@ export const createApp = (): Application => {
   const app = express();
 
   // Security Headers
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: { mediaSrc: ["'self'", 'blob:'] },
+    },
+  }));
 
   // CORS Configuration
   app.use(
@@ -19,13 +23,15 @@ export const createApp = (): Application => {
       origin: [env.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Id'],
+      allowedHeaders: ['Content-Type'],
     })
   );
 
   // Request Logging
   if (env.NODE_ENV !== 'test') {
-    app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+    app.use(    morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+      skip: (req) => req.path.startsWith('/api/client-portal/'),
+    }));
   }
 
   // Body Parsing

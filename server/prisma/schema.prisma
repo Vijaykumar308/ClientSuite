@@ -1,0 +1,456 @@
+// Prisma Schema for ClientSuite Music Multi-Tenant SaaS
+// Production-Ready PostgreSQL Architecture
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------
+// 1. Platform Admin & Global SaaS Ownership
+// ----------------------------------------------------
+
+enum PlatformAdminRole {
+  SUPER_ADMIN
+  SUPPORT_ADMIN
+}
+
+model PlatformAdmin {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  passwordHash String
+  name         String
+  role         PlatformAdminRole @default(SUPER_ADMIN)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("platform_admins")
+}
+
+// ----------------------------------------------------
+// 2. Multi-Tenant Workspaces (Music Directors & Studios)
+// ----------------------------------------------------
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum TenantPlan {
+  FREE_TRIAL
+  STARTER
+  PRO
+  STUDIO
+}
+
+model Tenant {
+  id                  String         @id @default(uuid())
+  name                String
+  slug                String         @unique
+  status              TenantStatus   @default(TRIAL)
+  plan                TenantPlan     @default(FREE_TRIAL)
+  storageQuotaBytes   BigInt         @default(10737418240) // 10 GB default
+  storageUsedBytes    BigInt         @default(0)
+  maxPreviewSeconds   Int            @default(20)
+  trialEndsAt         DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // Relationships
+  users               User[]
+  branding            TenantBranding?
+  paymentGateway      TenantPaymentGateway?
+  clients             Client[]
+  projects            Project[]
+  audioTracks         ProjectAudioTrack[]
+  assets              ProjectAsset[]
+  feedbacks           ProjectFeedback[]
+  approvals           ProjectApproval[]
+  transactions        PaymentTransaction[]
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+
+  @@map("tenants")
+}
+
+// ----------------------------------------------------
+// 3. Tenant Users (Music Directors, Producers, Staff)
+// ----------------------------------------------------
+
+enum UserRole {
+  TENANT_ADMIN
+  TEAM_MEMBER
+}
+
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String?
+  role         UserRole  @default(TENANT_ADMIN)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+// ----------------------------------------------------
+// 4. White-Label Branding & Client Portal Customization
+// ----------------------------------------------------
+
+enum ThemeMode {
+  DARK
+  LIGHT
+  SYSTEM
+}
+
+model TenantBranding {
+  id             String    @id @default(uuid())
+  tenantId       String    @unique
+  businessName   String?
+  logoUrl        String?
+  faviconUrl     String?
+  primaryColor   String    @default("#6366f1")
+  accentColor    String    @default("#8b5cf6")
+  themeMode      ThemeMode @default(DARK)
+  customDomain   String?   @unique
+  domainVerified Boolean   @default(false)
+  footerText     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_brandings")
+}
+
+// ----------------------------------------------------
+// 5. Tenant Direct-Settlement Payment Gateway Settings
+// ----------------------------------------------------
+
+enum GatewayProvider {
+  STRIPE
+  RAZORPAY
+  PAYPAL
+}
+
+model TenantPaymentGateway {
+  id                  String          @id @default(uuid())
+  tenantId            String          @unique
+  provider            GatewayProvider @default(STRIPE)
+  publicKey           String?
+  encryptedSecretRef  String?
+  webhookSecretRef    String?
+  defaultCurrency     String          @default("USD")
+  isEnabled           Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_payment_gateways")
+}
+
+// ----------------------------------------------------
+// 6. Client CRM (Buyers / Music Clients)
+// ----------------------------------------------------
+
+enum ClientStatus {
+  LEAD
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model Client {
+  id        String       @id @default(uuid())
+  tenantId  String
+  name      String
+  email     String
+  phone     String?
+  company   String?
+  status    ClientStatus @default(ACTIVE)
+  notes     String?      @db.Text
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projects  Project[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId, status])
+  @@map("clients")
+}
+
+// ----------------------------------------------------
+// 7. Project Lifecycle & Workflow
+// ----------------------------------------------------
+
+enum ProjectStatus {
+  DRAFT
+  PREVIEW_SHARED
+  CHANGES_REQUESTED
+  APPROVED
+  AWAITING_PAYMENT
+  PAID
+  DELIVERED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum DeliveryStatus {
+  LOCKED
+  UNLOCKED
+  DELIVERED
+}
+
+model Project {
+  id                    String              @id @default(uuid())
+  tenantId              String
+  clientId              String
+  name                  String
+  description           String?             @db.Text
+  status                ProjectStatus       @default(DRAFT)
+  price                 Decimal             @default(0.00) @db.Decimal(10, 2)
+  currency              String              @default("USD")
+  paymentStatus         PaymentStatus       @default(UNPAID)
+  deliveryStatus        DeliveryStatus      @default(LOCKED)
+  dueDate               DateTime?
+  portalToken           String              @unique @default(uuid())
+  portalTokenExpiresAt  DateTime?
+  portalEnabled         Boolean             @default(false)
+  requirePaymentForDownload Boolean          @default(true)
+  internalNotes         String?             @db.Text
+  clientNotes           String?             @db.Text
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client                Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  audioTracks           ProjectAudioTrack[]
+  assets                ProjectAsset[]
+  feedbacks             ProjectFeedback[]
+  approval              ProjectApproval?
+  transactions          PaymentTransaction[]
+
+  @@index([tenantId, status])
+  @@index([portalToken])
+  @@map("projects")
+}
+
+// ----------------------------------------------------
+// 8. Audio Assets (Original Master & Trimmed Preview)
+// ----------------------------------------------------
+
+enum AssetStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model ProjectAudioTrack {
+  id        String         @id @default(uuid())
+  tenantId  String
+  projectId String
+  title     String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions ProjectAsset[]
+
+  @@index([tenantId, projectId])
+  @@map("project_audio_tracks")
+}
+
+model ProjectAsset {
+  id                     String            @id @default(uuid())
+  tenantId               String
+  projectId              String
+  audioTrackId           String
+  versionNumber          Int               @default(1)
+  title                  String
+  fileName               String
+  originalStoragePath    String            // Secure private server storage path
+  previewStoragePath     String?           // Server-trimmed 10-15s preview file path
+  previewDurationSeconds Int               @default(20)
+  durationSeconds        Float?
+  fileSizeBytes          BigInt?
+  mimeType               String?
+  waveformPeaksJson      String?           @db.Text // Peaks data for UI waveform rendering
+  status                 AssetStatus       @default(PROCESSING)
+  isActiveVersion        Boolean           @default(true)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  tenant                 Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project                Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  audioTrack             ProjectAudioTrack @relation(fields: [audioTrackId], references: [id], onDelete: Cascade)
+  feedbacks              ProjectFeedback[]
+
+  @@index([tenantId, projectId])
+  @@unique([audioTrackId, versionNumber])
+  @@map("project_assets")
+}
+
+// ----------------------------------------------------
+// 9. Client Feedback & Timecoded Comments
+// ----------------------------------------------------
+
+enum FeedbackAuthorRole {
+  CLIENT
+  DIRECTOR
+}
+
+model ProjectFeedback {
+  id               String             @id @default(uuid())
+  tenantId         String
+  projectId        String
+  assetId          String?
+  authorRole       FeedbackAuthorRole @default(CLIENT)
+  authorName       String
+  timestampSeconds Float?             // Audio cue timecode (e.g. 00:08.5)
+  comment          String             @db.Text
+  isResolved       Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+
+  tenant           Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project          Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset            ProjectAsset?      @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, projectId])
+  @@map("project_feedbacks")
+}
+
+// ----------------------------------------------------
+// 10. Project Formal Approvals
+// ----------------------------------------------------
+
+model ProjectApproval {
+  id         String   @id @default(uuid())
+  tenantId   String
+  projectId  String   @unique
+  approvedBy String   // Client name or email
+  clientIp   String?
+  userAgent  String?
+  approvedAt DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_approvals")
+}
+
+// ----------------------------------------------------
+// 11. Payment Transactions & Direct Settlement
+// ----------------------------------------------------
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model PaymentTransaction {
+  id              String            @id @default(uuid())
+  tenantId        String
+  projectId       String
+  amount          Decimal           @db.Decimal(10, 2)
+  currency        String            @default("USD")
+  status          TransactionStatus @default(PENDING)
+  gatewayProvider GatewayProvider
+  gatewayTxId     String?           @unique
+  rawWebhookJson  String?           @db.Text
+  paidAt          DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, projectId])
+  @@map("payment_transactions")
+}
+
+// ----------------------------------------------------
+// 12. Security Audit Logs
+// ----------------------------------------------------
+
+enum ActorType {
+  PLATFORM_ADMIN
+  TENANT_USER
+  CLIENT
+  SYSTEM
+}
+
+model AuditLog {
+  id           String    @id @default(uuid())
+  tenantId     String?
+  actorId      String?
+  actorType    ActorType
+  action       String    // e.g. "TENANT_SUSPENDED", "PAYMENT_RECEIVED", "AUDIO_DOWNLOADED"
+  resource     String    // e.g. "PROJECT", "ASSET", "PAYMENT"
+  resourceId   String?
+  metadataJson String?   @db.Text
+  ipAddress    String?
+  createdAt    DateTime  @default(now())
+
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, action])
+  @@map("audit_logs")
+}
+
+// ----------------------------------------------------
+// 13. In-App & Email Notifications
+// ----------------------------------------------------
+
+enum NotificationType {
+  INVITATION
+  PREVIEW_READY
+  FEEDBACK_SUBMITTED
+  PROJECT_APPROVED
+  PAYMENT_RECEIVED
+  DOWNLOAD_AVAILABLE
+  SYSTEM_ALERT
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  tenantId       String
+  recipientEmail String
+  type           NotificationType
+  title          String
+  message        String           @db.Text
+  isRead         Boolean          @default(false)
+  sentAt         DateTime         @default(now())
+
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isRead])
+  @@map("notifications")
+}
